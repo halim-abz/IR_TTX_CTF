@@ -1,6 +1,6 @@
 # Incident Guild CTF — Multiplayer Tournament (Version 5 rules)
 
-A hosted, multiplayer capture-the-flag-style incident response exercise **based on Incident Guild Version 5**, using the original three scenario definitions, NetWitness Logs / Network / Endpoint simulated evidence, D20 decisions, investigation queries, conclusions, and grading logic.
+A hosted, multiplayer capture-the-flag-style incident response exercise with a streamlined four-workspace UI **based on Incident Guild Version 5**, using the original three scenario definitions, NetWitness Logs / Network / Endpoint simulated evidence, D20 decisions, investigation queries, conclusions, and grading logic.
 
 Players compete **independently** in the same tournament. No account registration or passwords for players: each player claims an available username once and gets a private browser session cookie. The server holds game state and calculates scores; browsers cannot submit their own final score.
 
@@ -11,7 +11,7 @@ Download and unzip this project, open a terminal in its folder, and start the se
 **macOS / Linux**
 
 ```bash
-export ADMIN_PASSWORD='choose-a-strong-private-password'
+# Optional: export ADMIN_PASSWORD='a-long-private-password' (otherwise one is generated and saved)
 export HOST=0.0.0.0
 export PORT=3000
 node server/server.cjs
@@ -20,7 +20,7 @@ node server/server.cjs
 **Windows PowerShell**
 
 ```powershell
-$env:ADMIN_PASSWORD = Read-Host "Choose a strong private admin password"
+$env:ADMIN_PASSWORD = Read-Host "Optional private admin password (leave blank to generate)"
 $env:HOST = '0.0.0.0'
 $env:PORT = '3000'
 node .\server\server.cjs
@@ -32,11 +32,15 @@ You can run with Docker Compose instead:
 
 ```bash
 cp .env.example .env
-# Edit .env and replace ADMIN_PASSWORD with a strong secret.
+# Leave ADMIN_PASSWORD empty to auto-generate a unique password.
+# Set HOST_PORT=3030 (already the Docker default).
+# COOKIE_SECURE=1 when accessing from Cloudflare HTTPS.
 docker compose up -d --build
+# Read the generated admin password:
+docker compose logs | grep "administrator password"
 ```
 
-Then visit `http://localhost:3000`, or your HTTPS domain if configured.
+Then visit `http://localhost:3030`, or your Cloudflare HTTPS domain if configured. The application still listens on port 3000 *inside* Docker.
 
 ## How the competition works
 
@@ -53,7 +57,7 @@ Then visit `http://localhost:3000`, or your HTTPS domain if configured.
 
 Select **Admin tools**, enter the administrator password, and type `RESET EVERYTHING` to confirm. This clears **all player usernames, session tokens, incident histories, completed scores, and leaderboard entries**, and starts a fresh tournament with new random dice seeds. Existing clients are notified automatically and must choose a username again. Old cookies cease to authorize access.
 
-The admin password comes from `ADMIN_PASSWORD`. If the environment variable is not supplied, a random password is generated and printed in the server's terminal **at startup**. For operational use, supply a secret explicitly instead of depending on terminal output. Admin reset attempts are rate limited. A forgotten password can be changed by restarting the server with a new `ADMIN_PASSWORD` (without deleting the competition database).
+The admin password comes from `ADMIN_PASSWORD`, if configured. Otherwise, a **unique 32-character password is generated on first startup**, stored persistently in `data/admin-password.txt` (inside Docker at `/app/data/admin-password.txt`), and displayed in the server logs on every start. It does not change after a restart or image rebuild. For operational use, supply a secret explicitly instead of depending on terminal output. Admin reset attempts are rate limited. To retrieve the generated password on Docker: `docker compose exec -T incident-guild-ctf cat /app/data/admin-password.txt`. To replace it, configure a unique `ADMIN_PASSWORD` in `.env` and recreate the container. Never publish a fixed default password or commit `.env`/`data/` to GitHub.
 
 ## Data and operating constraints
 
@@ -116,3 +120,45 @@ The new **Investigation Field Guide** appears above the search box. Each scenari
 ### Competition and deployment
 
 Use the existing [Quick start](#quick-start-nodejs-22-no-npm-install-needed) instructions unchanged. This is a drop-in replacement project: deploy this package to the same **single** Node.js CTF instance and preserve the `data/` directory to keep an ongoing tournament. The new fields are derived from fixed scenario fixtures on the server, so previously saved player events can be replayed consistently. For an equitable competition, consider announcing the new inspection capabilities to every player at the same time; the administrator can reset the tournament if everyone should restart under the new rules.
+
+
+## UX refresh — compact competition workspace
+
+This build is still the **Version 5 gameplay and authoritative tournament scoring engine**. The redesign affects the client layout, not scenario content or score calculations.
+
+- **Four navigation destinations:** Mission, Investigation, Casebook, Rankings. Admin settings are a small settings control rather than a permanent primary navigation category.
+- **Mission screen:** Ready, Response, Investigate and All actions. Only available, non-hazardous tasks appear under Ready. At most six cards appear at a time; expand to see more. Completed and locked tasks stay accessible in All actions. A compact incident header has an expandable full brief.
+- **Casebook:** Evidence, conclusions and after-action review appear as subtabs. Long incident chronicles are collapsed until requested.
+- **Investigation:** Query input, pivot chips and record results are visible together. Results have an internal scroll region with sticky column headings. Packet reconstruction and complete endpoint command lines remain available through the Inspect dialog without expanding lengthy packet dumps in every result row.
+- **Mobile:** Navigation becomes a four-cell bar. Objectives start collapsed to reduce scrolling and can be opened whenever needed. Admin settings remain accessible via the top-right gear.
+- **Rankings:** Scroll inside the table for large tournaments. Server-sent events still push standings in real time.
+
+### Ubuntu Docker Desktop and Cloudflare Tunnel
+
+From the project directory:
+
+```bash
+# Optional: copy configuration (omit if .env already exists)
+cp -n .env.example .env
+# Choose COOKIE_SECURE=1 in .env once using your Cloudflare HTTPS hostname.
+docker compose up -d --build
+docker compose ps
+docker compose logs --tail 30
+```
+
+- Docker publishes `HOST_PORT` (**3030** by default) to the application's internal port **3000**.
+- If `cloudflared` is a separate Docker Desktop container, set the public hostname's HTTP origin URL to `http://host.docker.internal:3030` (assuming the two containers do not already share a custom Docker network).
+- For LAN testing before enabling HTTPS-only cookies, use `COOKIE_SECURE=0`; when accessing the public HTTPS Cloudflare URL, use `COOKIE_SECURE=1` and recreate the container. The origin itself remains HTTP.
+- If your earlier `.env` specifies `ADMIN_PASSWORD`, that existing secret takes precedence over the automatically generated one. To use the generated persistent default, remove or empty that setting.
+- The default password is intentionally **not a globally shared demo password**. It is unique to your installation and survives restarts. Do not put an administrator password in GitHub or a publicly readable file.
+- Keep your Docker volume `guild_competition_data` when upgrading. Do not run `docker compose down -v` unless you intend to destroy the tournament data.
+
+### Local test server
+
+For development without Docker, with Node.js 22 or newer:
+
+```bash
+HOST=127.0.0.1 PORT=3030 node server/server.cjs
+```
+
+The app runs at `http://127.0.0.1:3030` on that machine. The password will be saved to `data/admin-password.txt`. This ChatGPT environment can run local tests but cannot provide you with a durable, publicly accessible hosting address; for other devices, use your Ubuntu server / Cloudflare Tunnel.

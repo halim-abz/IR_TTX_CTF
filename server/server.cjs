@@ -4,8 +4,19 @@ const {Simulator,STAGES}=require('./simulator.cjs');
 const PORT=Number(process.env.PORT||3000),HOST=process.env.HOST||'0.0.0.0';
 const DATA_DIR=path.resolve(process.env.DATA_DIR||path.join(__dirname,'..','data'));
 const DB_FILE=path.join(DATA_DIR,'competition.json');const PUBLIC=path.resolve(__dirname,'../public');
+// A unique default administrator password is generated once per installation and
+// stored in the persistent data volume. Never ship a public fixed password.
+const ADMIN_PASSWORD_FILE=path.join(DATA_DIR,'admin-password.txt');
 const GENERATED_ADMIN_PASSWORD=!process.env.ADMIN_PASSWORD;
-const ADMIN_PASSWORD=process.env.ADMIN_PASSWORD||crypto.randomBytes(18).toString('base64url');
+let ADMIN_PASSWORD;
+if(process.env.ADMIN_PASSWORD){ADMIN_PASSWORD=process.env.ADMIN_PASSWORD;}
+else if(fs.existsSync(ADMIN_PASSWORD_FILE)){ADMIN_PASSWORD=fs.readFileSync(ADMIN_PASSWORD_FILE,'utf8').trim();}
+else{
+ fs.mkdirSync(DATA_DIR,{recursive:true,mode:0o700});
+ ADMIN_PASSWORD=crypto.randomBytes(24).toString('base64url');
+ fs.writeFileSync(ADMIN_PASSWORD_FILE,ADMIN_PASSWORD+'\n',{mode:0o600,flag:'wx'});
+}
+if(!ADMIN_PASSWORD||ADMIN_PASSWORD.length<12)throw Error('ADMIN_PASSWORD must contain at least 12 characters');
 const COOKIE_SECURE=process.env.COOKIE_SECURE==='1';
 const PROF='standard';
 
@@ -94,5 +105,5 @@ async function handle(req,res){const url=new URL(req.url,'http://localhost');con
  return fail(res,404,'Unknown API endpoint');
 }
 const server=http.createServer((req,res)=>{Promise.resolve(handle(req,res)).catch(e=>{if(!res.headersSent)fail(res,e.status||500,(e.status?e.message:'Server error'));console.error('Request error:',e.message);});});
-if(require.main===module){server.listen(PORT,HOST,()=>{console.log(`Incident Guild CTF available at http://localhost:${PORT}`);console.log(`Data directory: ${DATA_DIR}`);console.log('Incident Guild v5 core, tournament difficulty: standard');if(GENERATED_ADMIN_PASSWORD)console.log(`Generated admin password (store privately): ${ADMIN_PASSWORD}`);else console.log('Admin password loaded from environment (not displayed).');console.log('For internet use, place the server behind HTTPS and set COOKIE_SECURE=1.');});}
+if(require.main===module){server.listen(PORT,HOST,()=>{console.log(`Incident Guild CTF available at http://localhost:${PORT}`);console.log(`Data directory: ${DATA_DIR}`);console.log('Incident Guild v5 core, tournament difficulty: standard');if(GENERATED_ADMIN_PASSWORD){console.log('Auto-generated persistent administrator password (protect these logs): '+ADMIN_PASSWORD);console.log('Stored in '+ADMIN_PASSWORD_FILE+'; set ADMIN_PASSWORD in .env to override.');}else console.log('Admin password loaded from environment (not displayed).');console.log('For internet use, place the server behind HTTPS and set COOKIE_SECURE=1.');});}
 module.exports={server};
