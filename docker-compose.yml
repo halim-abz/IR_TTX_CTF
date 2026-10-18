@@ -1,0 +1,16 @@
+services:
+  incident-guild-ctf:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATA_DIR: /app/data
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      COOKIE_SECURE: ${COOKIE_SECURE:-0}
+    volumes:
+      - guild_competition_data:/app/data
+volumes:
+  guild_competition_data:
