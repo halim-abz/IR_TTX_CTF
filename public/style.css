@@ -44,3 +44,19 @@
 .objective-summary{display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;list-style:none}.objective-summary::-webkit-details-marker{display:none}.objective-summary::after{content:'⌄';color:#81cbbd;font-size:13px}.compact-objectives[open] .objective-summary::after{content:'⌃'}.compact-objectives .objective-progress{margin-top:10px}
 @media(max-width:800px){.compact-sidebar .mobile-tabs{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;width:100%;overflow:visible!important;flex:1 0 100%}.compact-sidebar .mobile-tabs .nav{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:100%;min-width:0;white-space:normal;font-size:10px;line-height:1.2;padding:7px 1px;min-height:48px;text-align:center}}
 .history-details{background:#112839;border:1px solid #2b5160;border-radius:9px;padding:13px}.history-details summary{font-weight:700;cursor:pointer;color:#a9dacf}.history-details[open] summary{margin-bottom:10px}.history-details .feed{padding:9px 0}.leaderboard{max-height:min(65vh,650px);overflow:auto}.leaderboard th{position:sticky;top:0;z-index:2;background:#152c3c}
+
+/* CTF round 2 — one navigation source, complete case briefing, compact flags */
+.mission-title{flex:1;min-width:0}.full-mission-description{max-width:none!important;white-space:normal;overflow:visible;display:block;line-height:1.55}
+.mission-brief{margin:-7px 0 13px;padding:12px 17px;white-space:normal}
+.flag-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.flag-card{display:flex;flex-direction:column;gap:10px}.flag-card.solved{border-color:#3d8d79}.flag-card p{color:#b5cfde}.flag-card .input{flex:1 1 160px}.flag-card .row{align-items:center}
+.sidebar.compact-sidebar .nav-list{display:flex;flex-direction:column}
+@media(max-width:800px){.sidebar.compact-sidebar .nav-list{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;width:100%;flex:1 0 100%;padding:0;min-width:0}.sidebar.compact-sidebar .nav-list .nav-label{display:none}.sidebar.compact-sidebar .nav-list .nav{font-size:11px;display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center;padding:7px 1px;min-height:48px;min-width:0}.flag-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.mission-header-actions{width:auto}.flag-card .row{flex-wrap:wrap}}
+
+@media(max-width:800px){
+ .mission-header-compact{display:flex;flex-direction:column;align-items:stretch!important;gap:12px}
+ .mission-header-compact .mission-title{width:100%!important;flex:0 0 auto;min-width:0}
+ .mission-header-compact .mission-header-actions{width:100%!important;display:flex;flex-wrap:wrap;justify-content:flex-start!important}
+ .mission-header-compact h2{font-size:23px;line-height:1.2}
+ .full-mission-description{max-width:100%!important;width:100%;overflow-wrap:break-word}
+}

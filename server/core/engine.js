@@ -6,7 +6,7 @@
 for(const sc of Object.values(ALL_SCENARIOS)){
  sc.objectives.push(['Validate two supported incident conclusions',s=>!!s.flags.assessmentReady]);
  const verify=sc.actions.find(a=>a.id==='verify');
- if(verify)verify.requires.push('f:assessmentReady');
+ if(verify){verify.requires.push('f:assessmentReady');verify.requires.push('f:ctfValidated');}
 }
 
 const $=id=>document.getElementById(id);
@@ -18,18 +18,18 @@ const scenario=id=>ALL_SCENARIOS[id];
 const storeKey=id=>`incident-guild-save-v5-${id}`;
 const xpKey='incident-guild-career-xp-v1';
 const INCIDENT_LIMIT=240;
-const SERIOUS_DECISIONS={midnight:{panic:{points:38,cap:44,why:'Emergency shutdown disconnected critical infrastructure and caused an avoidable business outage.'}},lantern:{shutdown:{points:40,cap:42,why:'Disabling the entire customer API caused an avoidable large-scale service outage.'}},valve:{'kill-plc':{points:75,cap:15,terminal:true,why:'Unapproved isolation of a live controller created an unacceptable process-safety event.'},reboot:{points:40,cap:40,why:'Unplanned supervisory-system restart degraded operator visibility during an active intrusion.'}}};
-const EVENT_IMPACT={midnight:{38:{points:4,cap:92},57:{points:9,cap:82},77:{points:19,cap:58},105:{points:8,cap:76}},lantern:{39:{points:9,cap:82},64:{points:9,cap:78},89:{points:20,cap:52},112:{points:6,cap:85}},valve:{39:{points:5,cap:88},67:{points:19,cap:58},88:{points:22,cap:45},115:{points:8,cap:80}}};
-const TIMING_TARGETS={midnight:{contain:55,resolve:145},lantern:{contain:55,resolve:140},valve:{contain:70,resolve:165}};
-const CRITICAL_FLAGS={midnight:['identity','spread'],lantern:['identity','egress'],valve:['identity','spread']};
+const SERIOUS_DECISIONS={webshell:{shutdown:{points:40,cap:42,why:'Unnecessary outage of the full web application stack.'}},midnight:{panic:{points:38,cap:44,why:'Emergency shutdown disconnected critical infrastructure and caused an avoidable business outage.'}},lantern:{shutdown:{points:40,cap:42,why:'Disabling the entire customer API caused an avoidable large-scale service outage.'}},valve:{'kill-plc':{points:75,cap:15,terminal:true,why:'Unapproved isolation of a live controller created an unacceptable process-safety event.'},reboot:{points:40,cap:40,why:'Unplanned supervisory-system restart degraded operator visibility during an active intrusion.'}}};
+const EVENT_IMPACT={webshell:{48:{points:7,cap:88},78:{points:18,cap:62},119:{points:8,cap:79}},midnight:{38:{points:4,cap:92},57:{points:9,cap:82},77:{points:19,cap:58},105:{points:8,cap:76}},lantern:{39:{points:9,cap:82},64:{points:9,cap:78},89:{points:20,cap:52},112:{points:6,cap:85}},valve:{39:{points:5,cap:88},67:{points:19,cap:58},88:{points:22,cap:45},115:{points:8,cap:80}}};
+const TIMING_TARGETS={webshell:{contain:60,resolve:150},midnight:{contain:55,resolve:145},lantern:{contain:55,resolve:140},valve:{contain:70,resolve:165}};
+const CRITICAL_FLAGS={webshell:['identity','spread'],midnight:['identity','spread'],lantern:['identity','egress'],valve:['identity','spread']};
 // Explicit dice modes: no scripted rolls or hidden fudging. Standard is the balanced default.
 const MODE_INFO={guided:{label:'Guided',dc:-4,advantage:true,description:'Learning mode: forgiving rolls with fewer complications.'},standard:{label:'Standard',dc:1,advantage:true,description:'Meaningful uncertainty: expert advantage, real partial results and action-order consequences.'},veteran:{label:'Veteran',dc:2,advantage:false,description:'Hard mode: single D20, stricter checks and higher uncertainty.'}};
 let currentMode='standard';try{const m=localStorage.getItem('incident-guild-dice-mode-v2');if(MODE_INFO[m])currentMode=m;}catch(e){}
 function effectiveDC(a){return Math.max(6,a.dc+MODE_INFO[currentMode].dc);}
-function fatigueFor(id){return Math.min(1,Math.floor((state?.used?.[id]||0)/6));}
-function specialist(id,skill){return MODE_INFO[currentMode].advantage&&skillBonus(id,skill)>=4;}
+function fatigueFor(id){return 0;}
+function specialist(id,skill){return MODE_INFO[currentMode].advantage;}
 function retryBonus(a){return Math.min(6,(state?.attempts?.[a.id]||0)*2);}
-function checkMath(a,id,assist=false){const skill=skillBonus(id,a.skill),fatigue=fatigueFor(id),coord=state.flags.coordinated?1:0,support=assist?2:0,retry=retryBonus(a),dc=effectiveDC(a),advantage=specialist(id,a.skill);return {skill,fatigue,coord,support,retry,dc,advantage};}
+function checkMath(a,id,assist=false){const skill=4,fatigue=0,coord=state.flags.coordinated?1:0,support=assist?2:0,retry=retryBonus(a),dc=effectiveDC(a),advantage=specialist(id,a.skill);return {skill,fatigue,coord,support,retry,dc,advantage};}
 function checkOdds(a,id,assist=false){const m=checkMath(a,id,assist);let success=0,progress=0;const score=(i,j)=>Math.max(i,j)+m.skill-m.fatigue+m.coord+m.support+m.retry;for(let i=1;i<=20;i++){for(let j=1;j<=(m.advantage?20:1);j++){const total=score(i,m.advantage?j:i);if(total>=m.dc)success++;else if(total>=m.dc-3)progress++;}}const size=m.advantage?400:20;return {success:Math.round(success/size*100),progress:Math.round(progress/size*100),fail:Math.round((size-success-progress)/size*100),...m};}
 function recommended(a){return [...CREW].sort((x,y)=>skillBonus(y.id,a.skill)-fatigueFor(y.id)-skillBonus(x.id,a.skill)+fatigueFor(x.id))[0].id;}
 
@@ -42,12 +42,12 @@ function career(){try{return JSON.parse(localStorage.getItem(xpKey))||{};}catch(
 function grantXp(role,points){try{let x=career();x[role]=(x[role]||0)+points;localStorage.setItem(xpKey,JSON.stringify(x));}catch(e){}}
 function lvl(id){return 1+Math.floor((career()[id]||0)/160);}
 function skillBonus(id,key){const base=CREW.find(r=>r.id===id)?.skills[key]||0;return base+Math.min(2,Math.floor((lvl(id)-1)/2));}
-function setup(id){const sc=scenario(id);return {scenarioId:id,clock:0,pressure:sc.start.pressure,health:sc.start.health,exposure:sc.start.exposure,evidence:[...sc.initial],flags:{},attempts:{},done:[],selectedRole:'analyst',activeTab:'operations',moves:0,used:{},eventResolved:[],history:[{time:0,type:'initial',title:'Incident declared',desc:sc.opening}],feed:[{time:0,type:'info',message:'New incident assigned. An alert is ready for triage.'}],console:{source:'Logs',query:INVESTIGATION_DATA[id].starter,results:null,inspected:[],searched:[],queryCount:0},hypotheses:{},hypothesisMistakes:0,ended:false,endReason:null,actionsTaken:[],quality:0,orderPenalty:0,flagTimes:{},orderEvents:[],severeDecisions:[],impactEvents:[]};}
+function setup(id){const sc=scenario(id);return {scenarioId:id,clock:0,pressure:sc.start.pressure,health:sc.start.health,exposure:sc.start.exposure,evidence:[...sc.initial],ctfFlags:{},ctfAttempts:{},flags:{},attempts:{},done:[],selectedRole:'analyst',activeTab:'operations',moves:0,used:{},eventResolved:[],history:[{time:0,type:'initial',title:'Incident declared',desc:sc.opening}],feed:[{time:0,type:'info',message:'New incident assigned. An alert is ready for triage.'}],console:{source:'Logs',query:INVESTIGATION_DATA[id].starter,results:null,inspected:[],searched:[],queryCount:0},hypotheses:{},hypothesisMistakes:0,ended:false,endReason:null,actionsTaken:[],quality:0,orderPenalty:0,flagTimes:{},orderEvents:[],severeDecisions:[],impactEvents:[]};}
 function pushFeed(message,type='info'){state.feed.unshift({time:state.clock,message,type});state.feed=state.feed.slice(0,40);}
 function log(title,desc,type='action'){state.history.push({time:state.clock,title,desc,type});}
 function delta(d){if(!d)return;state.pressure=clamp(state.pressure+(d.pressure||0));state.health=clamp(state.health+(d.health||0));state.exposure=clamp(state.exposure+(d.exposure||0));}
 function meets(req,s=state){if(!req)return true;if(req.startsWith('e:'))return s.evidence.includes(req.slice(2));if(req.startsWith('f:'))return !!s.flags[req.slice(2)];if(req.startsWith('!f:'))return !s.flags[req.slice(3)];if(req.startsWith('count:'))return s.evidence.length>=Number(req.slice(6));if(req.startsWith('or:'))return req.slice(3).split('|').some(x=>meets(x,s));return false;}
-function labelReq(req){if(req==='f:assessmentReady')return 'Validate two evidence-backed conclusions';const sc=scenario(state.scenarioId);if(req.startsWith('e:'))return 'Evidence: '+(sc.evidence[req.slice(2)]?.title||'missing');if(req.startsWith('f:'))return ({identity:'Compromised access revoked',spread:'Lateral path contained',egress:'Outbound transfer blocked',cleaned:'Persistence eradicated',restored:'Recovery complete',scoped:'Exposure assessed',otApproved:'Plant approval',safetyChecked:'Plant safety verified',baselineVerified:'Controller baseline checked'})[req.slice(2)]||req.slice(2);if(req.startsWith('count:'))return `Collect ${req.slice(6)} pieces of evidence`;if(req.startsWith('or:'))return req.slice(3).split('|').map(labelReq).join(' OR ');return req;}
+function labelReq(req){if(req==='f:assessmentReady')return 'Validate two evidence-backed conclusions';if(req==='f:ctfValidated')return 'Submit both forensic CTF flags';const sc=scenario(state.scenarioId);if(req.startsWith('e:'))return 'Evidence: '+(sc.evidence[req.slice(2)]?.title||'missing');if(req.startsWith('f:'))return ({identity:'Compromised access revoked',spread:'Lateral path contained',egress:'Outbound transfer blocked',cleaned:'Persistence eradicated',restored:'Recovery complete',scoped:'Exposure assessed',otApproved:'Plant approval',safetyChecked:'Plant safety verified',baselineVerified:'Controller baseline checked'})[req.slice(2)]||req.slice(2);if(req.startsWith('count:'))return `Collect ${req.slice(6)} pieces of evidence`;if(req.startsWith('or:'))return req.slice(3).split('|').map(labelReq).join(' OR ');return req;}
 function locked(a){return a.requires.some(x=>!meets(x));}
 function actionDone(a){return state.done.includes(a.id);}
 function isConsoleAction(a){return (a.cat==='investigate'||a.cat==='hunt') && ['Logs','Network','Endpoint'].includes(a.source) && !a.set.length && !a.close && a.evidence.length>0 && a.evidence.every(id=>INVESTIGATION_DATA[state.scenarioId].rows.some(r=>r.evidence===id));}
@@ -83,8 +83,8 @@ function judge(){
  const unsafe=serious.reduce((n,x)=>n+x.points,0);
  const incidentDamage=Math.min(40,impacts.reduce((n,x)=>n+x.points,0));
  const sequenceDamage=Math.min(24,Math.round((state.orderPenalty||0)*2.8));
- const fields={investigation:Math.round(state.evidence.length/Object.keys(sc.evidence).length*10),hypotheses:Math.round(Object.values(state.hypotheses||{}).filter(v=>v.correct).length/3*10),objectives:Math.round(completed/sc.objectives.length*20),operations:Math.round(state.health/100*15),data:Math.round((100-state.exposure)/100*15),containment:containPoints,resolution:resolvePoints,coordination:(state.flags.coordinated?3:0)+(state.flags.preserved?3:0)+discipline,unsafe,incidentDamage,sequenceDamage};
- const subtotal=['investigation','hypotheses','objectives','operations','data','containment','resolution','coordination'].reduce((sum,k)=>sum+fields[k],0);
+ const fields={flags:Math.round(Object.keys(state.ctfFlags||{}).filter(id=>state.ctfFlags[id]).length/2*7),investigation:Math.round(state.evidence.length/Object.keys(sc.evidence).length*6),hypotheses:Math.round(Object.values(state.hypotheses||{}).filter(v=>v.correct).length/3*7),objectives:Math.round(completed/sc.objectives.length*20),operations:Math.round(state.health/100*15),data:Math.round((100-state.exposure)/100*15),containment:containPoints,resolution:resolvePoints,coordination:(state.flags.coordinated?3:0)+(state.flags.preserved?3:0)+discipline,unsafe,incidentDamage,sequenceDamage};
+ const subtotal=['flags','investigation','hypotheses','objectives','operations','data','containment','resolution','coordination'].reduce((sum,k)=>sum+fields[k],0);
  const caps=[];
  for(const item of serious)caps.push({cap:item.cap,reason:item.why});
  for(const item of impacts)caps.push({cap:item.cap,reason:'Attack consequence: '+item.title});
@@ -159,7 +159,7 @@ function matchRecord(row,conditions){return conditions.some(group=>group.every(c
   switch(c.op){case '=':return a===b;case '!=':return a!==b;case '~':case 'contains':return a.includes(b);default:{const aa=Number(actual),bb=Number(c.value);if(c.key==='time')return c.op==='>'?a>b:c.op==='<'?a<b:c.op==='>='?a>=b:a<=b;if(!Number.isFinite(aa)||!Number.isFinite(bb))return false;return c.op==='>'?aa>bb:c.op==='<'?aa<bb:c.op==='>='?aa>=bb:aa<=bb;}}
  }));}
 function recordAvailable(row){
- const init={midnight:'03:14:02',lantern:'10:02:21',valve:'21:07:11'}[state.scenarioId];
+ const init={midnight:'03:14:02',lantern:'10:02:21',valve:'21:07:11',webshell:'14:10:12'}[state.scenarioId];
  const toSec=t=>{const [h,m,s=0]=t.split(':').map(Number);return h*3600+m*60+s;};
  const ready=Math.max(0,Math.floor((toSec(row.time)-toSec(init))/60));
  if(state.clock<ready)return false;
@@ -217,7 +217,7 @@ function collectTelemetry(id){
   state.evidence.push(row.evidence);
   const e=scenario(state.scenarioId).evidence[row.evidence];
   log('Forensic exhibit secured',`${e.title} — ${e.source}, ${e.asset}.`,'good');pushFeed('Evidence: '+e.title,'good');
-  for(const a of scenario(state.scenarioId).actions){if(isConsoleAction(a)&&a.evidence.every(x=>state.evidence.includes(x))&&!state.done.includes(a.id)){state.done.push(a.id);grantXp(recommended(a),7);}}
+  for(const a of scenario(state.scenarioId).actions){if(isConsoleAction(a)&&a.evidence.every(x=>state.evidence.includes(x))&&!state.done.includes(a.id)){state.done.push(a.id);}}
   consoleNotice='Evidence secured in the casebook. Relevant response actions may now be available.';
  }else if(row.evidence)consoleNotice='Record reviewed. That forensic exhibit is already in your casebook.';
  else consoleNotice='Benign/context record reviewed. It did not establish a new forensic finding.';
@@ -279,8 +279,7 @@ if(modal.type==='reset')return `<div class="modal" role="dialog" aria-modal="tru
 function actRoll(id){
  const sc=scenario(state.scenarioId),a=sc.actions.find(a=>a.id===id);
  if(!a||locked(a)||actionDone(a)||state.ended)return;
- const assistEl=$('assistSelect'),assist=assistEl?assistEl.value:'';
- const selected=modal?.role||recommended(a),r=CREW.find(x=>x.id===selected)||CREW[0];
+ const assist='',r={id:'system'}; // Fixed proficiency. No playable specialist personas.
  const {skill,fatigue,coord,support,retry,dc,advantage}=checkMath(a,r.id,!!assist);
  const dice=[Math.floor(Math.random()*20)+1];if(advantage)dice.push(Math.floor(Math.random()*20)+1);
  const die=Math.max(...dice),total=die+skill-fatigue+coord+support+retry;
@@ -311,7 +310,7 @@ function actRoll(id){
    if(verdict==='success'){
      desc=a.success||'The assigned task is completed and documented.';
      state.quality+=a.cat==='risky'?-10:5;
-     grantXp(r.id,['investigate','hunt'].includes(a.cat)?10:8);
+     // No character XP in CTF mode.
      pushFeed('Success: '+a.title,'good');
    }else{
      // Evidence from a near miss is real, but interpretation may require corroboration.

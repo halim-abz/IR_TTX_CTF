@@ -1,8 +1,8 @@
 {
-  "name": "incident-guild-ctf-v5",
-  "version": "1.2.0",
+  "name": "incident-trace-ctf",
+  "version": "2.0.0",
   "private": true,
-  "description": "Incident Guild Version 5 multiplayer CTF: streamlined UX, evidence console, real-time rankings, persistent private admin credential",
+  "description": "Incident Trace CTF: four server-verified incidents, reconstructed payloads, live scoreboard, tournament-specific forensic flags",
   "scripts": {
     "start": "node server/server.cjs"
   },

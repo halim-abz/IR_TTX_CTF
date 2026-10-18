@@ -22,7 +22,10 @@ const PROF='standard';
 
 fs.mkdirSync(DATA_DIR,{recursive:true,mode:0o700});
 function newDB(){return {epoch:crypto.randomUUID(),createdAt:new Date().toISOString(),seeds:Object.fromEntries(STAGES.map(id=>[id,crypto.randomInt(1,0x7fffffff)])),players:[]};}
-let db;if(fs.existsSync(DB_FILE)){try{db=JSON.parse(fs.readFileSync(DB_FILE,'utf8'));if(!Array.isArray(db.players))throw Error('invalid player store');}catch(e){throw Error('Cannot parse competition database: '+e.message);}}else{db=newDB();persist();}
+let db;if(fs.existsSync(DB_FILE)){try{db=JSON.parse(fs.readFileSync(DB_FILE,'utf8'));if(!Array.isArray(db.players))throw Error('invalid player store');
+  // Non-destructive migration: append the new mission to existing player records.
+  db.seeds??={};for(const id of STAGES)db.seeds[id]??=crypto.randomInt(1,0x7fffffff);
+  for(const player of db.players){player.rounds??=[];while(player.rounds.length<STAGES.length)player.rounds.push({status:'pending',score:null});}}catch(e){throw Error('Cannot parse competition database: '+e.message);}}else{db=newDB();persist();}
 let instances=new Map(),clients=new Set(),lastAttempt=new Map(),resetFailures=new Map();
 function persist(){const tmp=DB_FILE+'.tmp';fs.writeFileSync(tmp,JSON.stringify(db,null,2),{mode:0o600});fs.renameSync(tmp,DB_FILE);}
 function keyForPlayer(p){return `${db.epoch}:${p.id}`;}
@@ -77,8 +80,8 @@ async function handle(req,res){const url=new URL(req.url,'http://localhost');con
  }
  if(pth==='/api/action'){
   const p=playerFromReq(req);if(!p)return fail(res,401,'Session not found. Join again.');if(!perUserLimit(req,p.id))return fail(res,429,'Slow down before sending another move');
-  if(currentRound(p)<0)return fail(res,409,'All three scenarios have already finished');
-  const cmd=await parseBody(req);const allowed=['query','collect','hypothesis','action'];if(!allowed.includes(cmd.type))return fail(res,400,'Unsupported move');
+  if(currentRound(p)<0)return fail(res,409,'All four scenarios have already finished');
+  const cmd=await parseBody(req);const allowed=['query','collect','hypothesis','action','flag'];if(!allowed.includes(cmd.type))return fail(res,400,'Unsupported move');
   // Transaction: the in-memory engine is only considered authoritative after a validated move is committed.
   const sim=reconstruct(p),before=sim.state()?.clock;
   let response;try{response=sim.apply(cmd);}catch(e){ // discard a potentially partially mutated simulation
@@ -105,5 +108,5 @@ async function handle(req,res){const url=new URL(req.url,'http://localhost');con
  return fail(res,404,'Unknown API endpoint');
 }
 const server=http.createServer((req,res)=>{Promise.resolve(handle(req,res)).catch(e=>{if(!res.headersSent)fail(res,e.status||500,(e.status?e.message:'Server error'));console.error('Request error:',e.message);});});
-if(require.main===module){server.listen(PORT,HOST,()=>{console.log(`Incident Guild CTF available at http://localhost:${PORT}`);console.log(`Data directory: ${DATA_DIR}`);console.log('Incident Guild v5 core, tournament difficulty: standard');if(GENERATED_ADMIN_PASSWORD){console.log('Auto-generated persistent administrator password (protect these logs): '+ADMIN_PASSWORD);console.log('Stored in '+ADMIN_PASSWORD_FILE+'; set ADMIN_PASSWORD in .env to override.');}else console.log('Admin password loaded from environment (not displayed).');console.log('For internet use, place the server behind HTTPS and set COOKIE_SECURE=1.');});}
+if(require.main===module){server.listen(PORT,HOST,()=>{console.log(`NetWitness Incident CTF available at http://localhost:${PORT}`);console.log(`Data directory: ${DATA_DIR}`);console.log('NetWitness Incident CTF: evidence + flag challenge, tournament difficulty standard');if(GENERATED_ADMIN_PASSWORD){console.log('Auto-generated persistent administrator password (protect these logs): '+ADMIN_PASSWORD);console.log('Stored in '+ADMIN_PASSWORD_FILE+'; set ADMIN_PASSWORD in .env to override.');}else console.log('Admin password loaded from environment (not displayed).');console.log('For internet use, place the server behind HTTPS and set COOKIE_SECURE=1.');});}
 module.exports={server};

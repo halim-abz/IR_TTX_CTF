@@ -1,4 +1,4 @@
-# Incident Guild v5 CTF — Quick Ubuntu test
+# Incident Trace CTF · V5-based multiplayer · four-stage — Quick Ubuntu test
 
 The v5 game engine, usernames, scoreboard and admin reset remain unchanged. The updated interface has four navigation destinations.
 
@@ -36,3 +36,9 @@ Copy the new project source into your Git repository, excluding private `.env` a
 ## Testing notes
 
 This assistant executed the Node.js application and browser checks locally. The sandbox cannot publish a persistent public server address. To let other players connect, use your own Ubuntu Docker Desktop server and Cloudflare Tunnel.
+
+## Upgrading a previous tournament
+
+This release adds a fourth scenario and changes scoring. If you want to compare players fairly, reset the competition through Admin settings after replacing the application files and rebuilding. Existing data is retained unless you deliberately reset it.
+
+The **Docker service name** remains `incident-guild-ctf` and **volume name** remains `guild_competition_data` for backward compatibility. These are internal deployment identifiers, not the product name.
