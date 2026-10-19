@@ -1,6 +1,7 @@
 'use strict';
 const http=require('node:http');const fs=require('node:fs');const path=require('node:path');const crypto=require('node:crypto');
 const {Simulator,STAGES}=require('./simulator.cjs');
+const {makeReport,actionLesson}=require('./learning.cjs');
 const PORT=Number(process.env.PORT||3000),HOST=process.env.HOST||'0.0.0.0';
 const DATA_DIR=path.resolve(process.env.DATA_DIR||path.join(__dirname,'..','data'));
 const DB_FILE=path.join(DATA_DIR,'competition.json');const PUBLIC=path.resolve(__dirname,'../public');
@@ -34,7 +35,7 @@ function reconstruct(player){let sim=instances.get(keyForPlayer(player));if(sim)
  let current=-1;
  for(const item of player.events){
   if(item.type==='start'){current++;sim.start(item.scenario);}
-  else sim.apply(item);
+  else sim.apply(item,true);
  }
  instances.set(keyForPlayer(player),sim);return sim;
 }
@@ -52,7 +53,7 @@ function fail(res,status,message){return json(res,status,{error:message});}
 async function parseBody(req){return new Promise((resolve,reject)=>{let total=0,data='';req.on('data',chunk=>{total+=chunk.length;if(total>8192){reject(Object.assign(Error('Body too large'),{status:413}));req.destroy();}else data+=chunk;});req.on('end',()=>{try{resolve(JSON.parse(data||'{}'));}catch(e){reject(Object.assign(Error('Invalid JSON'),{status:400}));}});req.on('error',reject);});}
 function validOrigin(req){const origin=req.headers.origin;if(!origin)return true;try{const o=new URL(origin);const host=req.headers.host;return ['http:','https:'].includes(o.protocol)&&o.host===host;}catch(e){return false;}}
 function perUserLimit(req,id){const t=Date.now(),k=id||req.socket.remoteAddress||'unknown';const last=lastAttempt.get(k)||[];const live=last.filter(x=>t-x<10_000);if(live.length>=25)return false;live.push(t);lastAttempt.set(k,live);return true;}
-function submitRoundIfEnded(p,sim){const s=sim.state(),roundIdx=currentRound(p);if(roundIdx<0||!s.ended)return false;const round=p.rounds[roundIdx];round.status='complete';round.score=sim.score().score;round.assessment=sim.score().assessment;round.clock=s.clock;round.reason=s.endReason;round.finishedAt=new Date().toISOString();round.report={title:sim.snapshot().round.title,score:round.score,assessment:round.assessment,reason:round.reason,clock:s.clock,health:s.health,exposure:s.exposure,pressure:s.pressure,scoreBreakdown:sim.score().fields,caps:sim.score().caps,objectives:sim.snapshot().round.objectives,chronicle:s.history.slice(-90),evidence:s.evidence.map(id=>sim.snapshot().evidence.find(e=>e.id===id)).filter(Boolean)};return true;}
+function submitRoundIfEnded(p,sim){const s=sim.state(),roundIdx=currentRound(p);if(roundIdx<0||!s.ended)return false;const round=p.rounds[roundIdx];round.status='complete';round.score=sim.score().score;round.assessment=sim.score().assessment;round.clock=s.clock;round.reason=s.endReason;round.finishedAt=new Date().toISOString();round.report={learning:makeReport(sim),title:sim.snapshot().round.title,score:round.score,assessment:round.assessment,reason:round.reason,clock:s.clock,health:s.health,exposure:s.exposure,pressure:s.pressure,scoreBreakdown:sim.score().fields,caps:sim.score().caps,objectives:sim.snapshot().round.objectives,chronicle:s.history.slice(-90),evidence:s.evidence.map(id=>sim.snapshot().evidence.find(e=>e.id===id)).filter(Boolean)};return true;}
 function publicPlayer(p){const i=currentRound(p),lb=leaderboard().find(x=>x.name===p.name);return {id:p.id,name:p.name,rounds:p.rounds.map((r,n)=>({scenario:STAGES[n],status:r.status,score:r.status==='complete'?r.score:null,assessment:r.status==='complete'?r.assessment:null})),total:total(p),provisionalScore:lb?.provisional||0,liveTotal:lb?.score||0,completed:completedCount(p),active:i,finished:completedCount(p)===STAGES.length,rank:lb?.rank||null};}
 function stateResponse(p,last=null){const sim=reconstruct(p);return {player:publicPlayer(p),game:currentRound(p)>=0?sim.snapshot():null,reports:p.rounds.map(r=>r.status==='complete'?r.report||null:null),feedback:last};}
 function serveStatic(req,res,pth){const name=pth==='/'?'index.html':pth.slice(1);const names={'index.html':'text/html; charset=utf-8','app.js':'application/javascript; charset=utf-8','style.css':'text/css; charset=utf-8','favicon.svg':'image/svg+xml'};if(!Object.hasOwn(names,name))return fail(res,404,'Not found');let f=path.join(PUBLIC,name);try{const d=fs.readFileSync(f);headerNoCache(res);res.statusCode=200;res.setHeader('Content-Type',names[name]);res.end(d);}catch(e){fail(res,404,'Not found');}}
@@ -83,18 +84,34 @@ async function handle(req,res){const url=new URL(req.url,'http://localhost');con
   if(currentRound(p)<0)return fail(res,409,'All four scenarios have already finished');
   const cmd=await parseBody(req);const allowed=['query','collect','hypothesis','action','flag'];if(!allowed.includes(cmd.type))return fail(res,400,'Unsupported move');
   // Transaction: the in-memory engine is only considered authoritative after a validated move is committed.
-  const sim=reconstruct(p),before=sim.state()?.clock;
+  const sim=reconstruct(p),before=sim.state()?.clock,impactBefore=(sim.state()?.impactEvents||[]).length;
   let response;try{response=sim.apply(cmd);}catch(e){ // discard a potentially partially mutated simulation
     instances.delete(keyForPlayer(p));return fail(res,400,e.message||'Invalid move');
   }
   const stored=JSON.parse(JSON.stringify(cmd));p.events.push(stored);p.updatedAt=new Date().toISOString();const finalized=submitRoundIfEnded(p,sim);persist();
   broadcast('board',board());
-  return json(res,200,stateResponse(p,response.result));
+  const reply=stateResponse(p,response.result);reply.escalations=(sim.state()?.impactEvents||[]).slice(impactBefore).map(x=>({time:x.at,title:x.title,points:x.points,cap:x.cap}));if(cmd.type==='action'&&response.result)reply.coaching=actionLesson(response.result,sim.bridge.scene());if(finalized)reply.completedReport=p.rounds.find(r=>r.status==='complete'&&r.report?.title===sim.snapshot().round.title)?.report||null;return json(res,200,reply);
  }
  if(pth==='/api/next'){
   const p=playerFromReq(req);if(!p)return fail(res,401,'Session not found');const index=completedCount(p);if(index>=STAGES.length)return fail(res,409,'Competition completed');if(currentRound(p)!==-1)return fail(res,409,'Finish the current scenario first');
   p.rounds[index].status='active';p.events.push({type:'start',scenario:STAGES[index]});p.updatedAt=new Date().toISOString();
   const sim=reconstruct(p);sim.start(STAGES[index]);persist();broadcast('board',board());return json(res,200,stateResponse(p));
+ }
+ if(pth==='/api/admin/overview'){
+  const remote=req.socket.remoteAddress||'unknown',past=resetFailures.get(remote)||[],now=Date.now(),tries=past.filter(t=>now-t<600000);
+  if(tries.length>=5)return fail(res,429,'Too many incorrect admin passwords. Retry later.');
+  const input=await parseBody(req);const a=Buffer.from(crypto.createHash('sha256').update(String(input.password||'')).digest('hex'),'hex'),b=Buffer.from(crypto.createHash('sha256').update(ADMIN_PASSWORD).digest('hex'),'hex');
+  if(!crypto.timingSafeEqual(a,b)){tries.push(now);resetFailures.set(remote,tries);return fail(res,403,'Incorrect administrator password');}
+  resetFailures.delete(remote);
+  const ranks=new Map(leaderboard().map(x=>[x.name,x]));
+  const players=db.players.map(p=>{const rank=ranks.get(p.name),active=currentRound(p),sim=active>=0?reconstruct(p):null,state=sim?.state();return {
+    name:p.name,rank:rank?.rank||0,joinedAt:p.joinedAt,lastActivity:p.updatedAt,completed:completedCount(p),activeStage:active>=0?STAGES[active]:null,
+    total:rank?.score||0,finalized:total(p),provisional:rank?.provisional||0,
+    stages:p.rounds.map((r,i)=>({id:STAGES[i],status:r.status,score:r.score,clock:r.clock||null,assessment:r.assessment||null,finishedAt:r.finishedAt||null})),
+    activeDetails:state?{clock:state.clock,health:state.health,exposure:state.exposure,foundEvidence:state.evidence.length,flagsSolved:Object.values(state.ctfFlags||{}).filter(Boolean).length,conclusions:Object.values(state.hypotheses||{}).filter(x=>x.correct).length,damagingMilestones:(state.impactEvents||[]).length,unsafeDecisions:(state.severeDecisions||[]).length}:null,
+    learningIssues:p.rounds.filter(x=>x.status==='complete').flatMap(r=>(r.report?.learning?.needsImprovement||[]).map(x=>x.title))
+  };});
+  return json(res,200,{generatedAt:new Date().toISOString(),epoch:db.epoch,summary:{registered:players.length,active:players.filter(x=>x.activeStage!==null).length,finished:players.filter(x=>x.completed===STAGES.length).length,completedRounds:players.reduce((sum,x)=>sum+x.completed,0),averageFinalScore:players.length?Math.round(players.reduce((sum,x)=>sum+x.finalized,0)/players.length):0},players});
  }
  if(pth==='/api/admin/reset'){
   const remote=req.socket.remoteAddress||'unknown',past=resetFailures.get(remote)||[];const now=Date.now(),tries=past.filter(t=>now-t<600000);
@@ -108,5 +125,5 @@ async function handle(req,res){const url=new URL(req.url,'http://localhost');con
  return fail(res,404,'Unknown API endpoint');
 }
 const server=http.createServer((req,res)=>{Promise.resolve(handle(req,res)).catch(e=>{if(!res.headersSent)fail(res,e.status||500,(e.status?e.message:'Server error'));console.error('Request error:',e.message);});});
-if(require.main===module){server.listen(PORT,HOST,()=>{console.log(`NetWitness Incident CTF available at http://localhost:${PORT}`);console.log(`Data directory: ${DATA_DIR}`);console.log('NetWitness Incident CTF: evidence + flag challenge, tournament difficulty standard');if(GENERATED_ADMIN_PASSWORD){console.log('Auto-generated persistent administrator password (protect these logs): '+ADMIN_PASSWORD);console.log('Stored in '+ADMIN_PASSWORD_FILE+'; set ADMIN_PASSWORD in .env to override.');}else console.log('Admin password loaded from environment (not displayed).');console.log('For internet use, place the server behind HTTPS and set COOKIE_SECURE=1.');});}
+if(require.main===module){server.listen(PORT,HOST,()=>{console.log(`The War Room: Incident Response available at http://localhost:${PORT}`);console.log(`Data directory: ${DATA_DIR}`);console.log('The War Room: mandatory evidence flags, tournament difficulty standard');if(GENERATED_ADMIN_PASSWORD){console.log('Auto-generated persistent administrator password (protect these logs): '+ADMIN_PASSWORD);console.log('Stored in '+ADMIN_PASSWORD_FILE+'; set ADMIN_PASSWORD in .env to override.');}else console.log('Admin password loaded from environment (not displayed).');console.log('For internet use, place the server behind HTTPS and set COOKIE_SECURE=1.');});}
 module.exports={server};

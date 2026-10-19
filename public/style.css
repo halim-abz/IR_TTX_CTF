@@ -60,3 +60,25 @@
  .mission-header-compact h2{font-size:23px;line-height:1.2}
  .full-mission-description{max-width:100%!important;width:100%;overflow-wrap:break-word}
 }
+
+/* V2.1: educational mission review and restricted administrator overview */
+.conclusion-hint{margin:10px 0 13px;border:1px solid #38546a;border-radius:9px;padding:10px 12px;background:#16283a}
+.conclusion-hint summary{cursor:pointer;color:#b1cfe0}
+.conclusion-hint .tiny{padding-top:9px;line-height:1.7}
+.learning-note{border:1px solid #326d67;background:#153637;border-radius:12px;padding:16px;line-height:1.6}
+.learning-note.unsafe{border-color:#916648;background:#3a3029}
+.learning-note b{color:#e9f8f4}
+.learning-summary{border:1px solid #315366;border-radius:12px;padding:18px;background:#102437}
+.learning-summary h3{font-size:18px;line-height:1.45;margin-top:8px}
+.learning-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.learning-column{border:1px solid #294457;background:#102133;border-radius:12px;padding:17px}
+.learning-item{margin-top:11px;padding:11px 12px;border-left:3px solid #4b9789;border-radius:7px;background:#172d3c}
+.learning-item.bad{border-left-color:#dc995e;background:#302b31}
+.learning-item p{margin-top:6px;line-height:1.5}
+.recommendations{margin:12px 0 0;padding-left:23px;color:#d0e0ed}
+.recommendations li{padding:6px 0;line-height:1.6}
+.admin-reset{padding:18px;border:1px solid #674352}
+.admin-reset summary{cursor:pointer;font-weight:700;color:#ffb1ae}
+.admin-sort{width:auto;max-width:145px;margin-left:8px}
+.admin-box{padding:22px}
+@media(max-width:760px){.learning-grid{grid-template-columns:1fr}.learning-summary,.learning-column{padding:13px}.admin-box{padding:15px}}
